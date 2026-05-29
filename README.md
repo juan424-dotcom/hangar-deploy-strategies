@@ -1,1 +1,1 @@
-# hangar-deploy--strategies
+# hangar-deploy-strategies
