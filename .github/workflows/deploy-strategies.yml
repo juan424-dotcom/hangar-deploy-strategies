@@ -1,0 +1,68 @@
+name: Operação Hangar - Deploy Strategies
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  audit-and-simulate:
+    name: Inspeção de Voo e Validação de Estratégias
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obter código do Hangar
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Ler metadados da Tag Anotada
+        run: |
+          echo "=== EXAMINANDO CERTIFICADO DE VOO ==="
+          git show ${{ github.ref_name }} --quiet
+
+      - name: Validar Manifestos do Kubernetes
+        run: |
+          if [ ! -f k8s/service-router.yml ]; then
+            echo "ERRO CRÍTICO: Roteador de tráfego ausente!"
+            exit 1
+          fi
+          echo "Manifesto do roteador válido e estruturado!"
+
+      - name: Simulação de Deploy Seguro (Rollback Automático)
+        run: |
+          TAG_ATUAL="${{ github.ref_name }}"
+          echo "Iniciando deploy estratégico para a versão: $TAG_ATUAL"
+          
+          git config --global user.name "Hangar Copilot Bot"
+          git config --global user.email "copilot@hangar.com"
+          
+          if [ "$TAG_ATUAL" == "v2.1.0" ]; then
+             echo "🚨 ALERTA: Detectada anomalia crítica na telemetria da v2.1.0!"
+             echo "🔥 Iniciando procedimento automático de ABORTAR DEPLOY (Rollback)."
+             
+             # Correção segura usando buffer temporário (.tmp) para evitar esvaziar o arquivo
+             cat k8s/service-router.yml | sed 's/version: candidate/version: stable/g' > k8s/service-router.tmp
+             mv k8s/service-router.tmp k8s/service-router.yml
+             
+             git add k8s/service-router.yml
+             git commit -m "fix(rollback): força retorno para version: stable devido a falha na v2.1.0"
+             git push origin main
+             
+             echo "✅ Sistema restaurado com sucesso para a versão de segurança anterior!"
+             exit 1
+          fi
+          
+          echo "Virando a chave do Roteador para a nova versão candidata..."
+          cat k8s/service-router.yml | sed 's/version: stable/version: candidate/g' > k8s/service-router.tmp
+          mv k8s/service-router.tmp k8s/service-router.yml
+          
+          git add k8s/service-router.yml
+          git commit -m "build(deploy): rota atualizada para version: candidate via tag v1.0.0"
+          git push origin main
+          
+          echo "Deploy concluído com sucesso e gravado no repositório!"
